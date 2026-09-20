@@ -367,7 +367,7 @@ static void waiterCallback(void* info) {
 		NSDictionary<NSString*, NSString*>* env = nil;
 		NSFileHandle* stdin = nil;
 		NSFileHandle* stdout = nil;
-		NSFileHandle* stderr = nil;
+		NSFileHandle* stderrHandle = nil;
 		BOOL setProcessGroup = YES;
 
 		const char** cArgs = NULL;
@@ -409,7 +409,7 @@ static void waiterCallback(void* info) {
 		env = info[kEnv];
 		stdin = info[kStdin];
 		stdout = info[kStdout];
-		stderr = info[kStderr];
+		stderrHandle = info[kStderr];
 		setProcessGroup = !((NSNumber*)info[kNoProcGroup]).boolValue;
 
 		if ([stdin isKindOfClass: [NSPipe class]]) {
@@ -420,8 +420,8 @@ static void waiterCallback(void* info) {
 			stdout = [(NSPipe*)stdout fileHandleForWriting];
 		}
 
-		if ([stderr isKindOfClass: [NSPipe class]]) {
-			stderr = [(NSPipe*)stderr fileHandleForWriting];
+		if ([stderrHandle isKindOfClass: [NSPipe class]]) {
+			stderrHandle = [(NSPipe*)stderrHandle fileHandleForWriting];
 		}
 
 		// make sure the executable can actually be executed
@@ -457,14 +457,14 @@ static void waiterCallback(void* info) {
 		}
 
 		// make sure these are file handles (or pipes, which we already converted before)
-		if ((stdin && ![stdin isKindOfClass: [NSFileHandle class]]) || (stdout && ![stdout isKindOfClass: [NSFileHandle class]]) || (stderr && ![stderr isKindOfClass: [NSFileHandle class]])) {
+		if ((stdin && ![stdin isKindOfClass: [NSFileHandle class]]) || (stdout && ![stdout isKindOfClass: [NSFileHandle class]]) || (stderrHandle && ![stderrHandle isKindOfClass: [NSFileHandle class]])) {
 			if (useErrors) {
 				if (outError) {
 					// this is probably the wrong error code
 					*outError = [NSError errorWithDomain: NSCocoaErrorDomain code: NSFileNoSuchFileError userInfo: nil];
 				}
 			} else {
-				[NSException raise: NSInvalidArgumentException format: @"One or more of stdin, stdout, or stderr was not a file handle or pipe"];
+				[NSException raise: NSInvalidArgumentException format: @"One or more of stdin, stdout, or stderrHandle was not a file handle or pipe"];
 			}
 			return NO;
 		}
@@ -517,7 +517,7 @@ static void waiterCallback(void* info) {
 		}
 
 		if (stderr) {
-			cStderr = stderr.fileDescriptor;
+			cStderr = stderrHandle.fileDescriptor;
 			os_log_debug(nstask_get_log(), "using %d for stderr", cStderr);
 		}
 
