@@ -1,0 +1,95 @@
+# Cases that are expected to fail today, one per line as `op|name`.
+#
+# A listed case that fails is reported and does not fail the run.  A listed
+# case that PASSES fails the run, so this list cannot quietly rot: fix a
+# defect and you must delete its entries in the same change.
+#
+# Nothing may be added here to make a run green.  An entry is a defect with a
+# one-line statement of what is wrong, and it is removed when that is fixed.
+
+# --- NSDecimalString: reads past the mantissa and cannot express |x| < 1 ---
+# spec_max (NSDecimalCore.m) has no parentheses around its ?: and `<` binds
+# tighter than `?:`, so the digit loop's condition is nonzero for every input;
+# the loop walks off _mantissa[8].  Separately the mantissa is packed into a
+# 64-bit integer, so >19 digits cannot be represented, and
+# `length + _exponent` is computed in NSUInteger, so a value below 1 underflows
+# into a huge substring index.
+string|one
+string|int
+string|half
+string|thousandth
+string|money
+string|negative_tenth
+string|hundred
+string|zero
+string|leading_zeros
+string|wide_mantissa
+string|full_precision
+string|negative_wide
+
+# --- NSDecimalDivide: non-power-of-ten division goes through double ---
+# See the #warning in NSDecimalCore.m.  Quotients come back with about 16 good
+# significant digits and binary noise after them, and the call still reports
+# NSCalculationNoError.
+#
+# Not every wrong-looking quotient lands here.  1/5, 1/20, 1/40 and 100.00/3.2
+# are not exact as doubles, yet they survive the round trip because the scaling
+# in -[NSDecimalNumber initWithDouble:] re-rounds them back onto the right
+# decimal digits.  They are in the fixture as passing cases precisely because
+# that makes them useless as evidence and useful as a regression net.
+divide|third
+divide|seventh
+divide|sixth
+divide|eleventh
+divide|tenth_of_tenth
+divide|money_split
+
+# --- NSDecimalRound: not implemented, traps ---
+# Every case of both rounding-mode switches is a bare DEBUG_BREAK(), and there
+# is an unconditional one after them, so any scale that actually truncates
+# digits traps.  The trap is loud and therefore safe; it is left alone
+# deliberately.  Note also that `MAX(adjustedExponent, 4)` selects a divisor
+# from a five-element table and should be MIN: an adjusted exponent above 4
+# indexes that table out of bounds.
+round|plain_tie_up
+round|plain_tie_down
+round|plain_tie_int_odd
+round|plain_tie_int_even
+round|plain_neg_tie
+round|plain_neg_tie_int
+round|plain_below_tie
+round|plain_above_tie
+round|plain_money_cents
+round|down_tie_up
+round|down_tie_down
+round|down_tie_int_odd
+round|down_tie_int_even
+round|down_neg_tie
+round|down_neg_tie_int
+round|down_below_tie
+round|down_above_tie
+round|down_money_cents
+round|up_tie_up
+round|up_tie_down
+round|up_tie_int_odd
+round|up_tie_int_even
+round|up_neg_tie
+round|up_neg_tie_int
+round|up_below_tie
+round|up_above_tie
+round|up_money_cents
+round|bankers_tie_up
+round|bankers_tie_down
+round|bankers_tie_int_odd
+round|bankers_tie_int_even
+round|bankers_neg_tie
+round|bankers_neg_tie_int
+round|bankers_below_tie
+round|bankers_above_tie
+round|bankers_money_cents
+
+# --- NSDecimalSubtract: drops high mantissa limbs ---
+# 10000000000000000000 - 1 needs four limbs after the operands are normalised
+# to a common exponent; two come back.  Found by this fixture, not previously
+# reported, and not addressed here.
+subtract|wide

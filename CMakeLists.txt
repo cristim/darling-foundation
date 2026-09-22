@@ -63,6 +63,7 @@ set(foundation_sources
 	src/NSDate.m
 	src/NSDebug.m
 	src/NSDecimal.m
+	src/NSDecimalCore.m
 	src/NSDecimalNumber.m
 	src/NSDictionary.m
 	src/NSDictionaryOfVariableBindings.m
