@@ -37,6 +37,37 @@ static NSArray *patternSegments(NSString *pattern)
     return segments;
 }
 
+// The text of a pattern without digit placeholders ("'none'", "-"), with ICU quoting
+// removed; nil when the pattern has digits and must be formatted.
+static NSString *literalPattern(NSString *pattern)
+{
+    NSMutableString *text = [NSMutableString string];
+    BOOL quoted = NO;
+    for (NSUInteger i = 0; i < [pattern length]; i++)
+    {
+        unichar c = [pattern characterAtIndex:i];
+        if (c == '\'')
+        {
+            if (i + 1 < [pattern length] && [pattern characterAtIndex:i + 1] == '\'')
+            {
+                [text appendString:@"'"];
+                i++;
+            }
+            else
+            {
+                quoted = !quoted;
+            }
+            continue;
+        }
+        if (!quoted && ((c >= '0' && c <= '9') || c == '#' || c == '@'))
+        {
+            return nil;
+        }
+        [text appendFormat:@"%C", c];
+    }
+    return text;
+}
+
 @implementation NSNumberFormatter
 
 + (NSString *)localizedStringFromNumber:(NSNumber *)num numberStyle:(NSNumberFormatterStyle)nstyle
@@ -129,6 +160,7 @@ static NSNumberFormatterBehavior defaultBehavior = NSNumberFormatterBehaviorDefa
 - (void)setNumberStyle:(NSNumberFormatterStyle)style
 {
     _attributes[@"style"] = @(style);
+    [_attributes removeObjectsForKeys:@[@"positiveFormat", @"zeroFormat", @"negativeFormat"]];
     [self _reset];
 }
 
@@ -212,10 +244,9 @@ static NSNumberFormatterBehavior defaultBehavior = NSNumberFormatterBehaviorDefa
     {
         return format;
     }
-    [self _regenerateFormatter];
-    NSArray *segments = patternSegments((NSString *)CFNumberFormatterGetFormat(_formatter));
-    // Without a negative subpattern, ICU formats negatives as the minus sign before the positive pattern.
-    return [segments count] > 1 ? segments[1] : [@"-" stringByAppendingString:segments[0]];
+    // Without a negative pattern, negatives get the minus sign before the positive pattern.
+    NSString *positive = [self positiveFormat];
+    return positive != nil ? [@"-" stringByAppendingString:positive] : nil;
 }
 
 - (void)setNegativeFormat:(NSString *)format
@@ -241,6 +272,10 @@ static NSNumberFormatterBehavior defaultBehavior = NSNumberFormatterBehaviorDefa
         return format;
     }
     [self _regenerateFormatter];
+    if (_formatter == NULL)
+    {
+        return nil;
+    }
     return patternSegments((NSString *)CFNumberFormatterGetFormat(_formatter))[0];
 }
 
@@ -365,9 +400,18 @@ if (_formatter != NULL) { \
     return _attributes[(id)kCFNumberFormatterZeroSymbol];
 }
 
+// Rebuilds the formatter so that clearing the symbol brings back a zero pattern.
 - (void)setZeroSymbol:(NSString *)string
 {
-    SET_ID(kCFNumberFormatterZeroSymbol, string);
+    if (string != nil)
+    {
+        _attributes[(id)kCFNumberFormatterZeroSymbol] = [[string copy] autorelease];
+    }
+    else
+    {
+        [_attributes removeObjectForKey:(id)kCFNumberFormatterZeroSymbol];
+    }
+    [self _clearFormatter];
 }
 
 - (NSDictionary *)textAttributesForZero
@@ -776,21 +820,22 @@ if (_formatter != NULL) { \
     NSString *negative = _attributes[@"negativeFormat"];
     if (positive != nil || negative != nil)
     {
-        NSArray *segments = patternSegments((NSString *)CFNumberFormatterGetFormat(_formatter));
-        positive = positive ?: segments[0];
-        negative = negative ?: ([segments count] > 1 ? segments[1] : nil);
+        positive = positive ?: patternSegments((NSString *)CFNumberFormatterGetFormat(_formatter))[0];
         NSString *pattern = negative != nil ? [NSString stringWithFormat:@"%@;%@", positive, negative] : positive;
         CFNumberFormatterSetFormat(_formatter, (CFStringRef)pattern);
     }
     NSString *zero = _attributes[@"zeroFormat"];
     if (zero != nil && _attributes[(id)kCFNumberFormatterZeroSymbol] == nil)
     {
-        CFNumberFormatterRef zeroFormatter = CFNumberFormatterCreate(kCFAllocatorDefault, CFNumberFormatterGetLocale(_formatter), kCFNumberFormatterNoStyle);
-        CFNumberFormatterSetFormat(zeroFormatter, (CFStringRef)zero);
-        CFStringRef symbol = CFNumberFormatterCreateStringWithNumber(kCFAllocatorDefault, zeroFormatter, (CFNumberRef)@0);
-        CFNumberFormatterSetProperty(_formatter, kCFNumberFormatterZeroSymbol, symbol);
-        CFRelease(symbol);
-        CFRelease(zeroFormatter);
+        NSString *symbol = literalPattern(zero);
+        if (symbol == nil)
+        {
+            CFNumberFormatterRef zeroFormatter = CFNumberFormatterCreate(kCFAllocatorDefault, CFNumberFormatterGetLocale(_formatter), kCFNumberFormatterNoStyle);
+            CFNumberFormatterSetFormat(zeroFormatter, (CFStringRef)zero);
+            symbol = [(NSString *)CFNumberFormatterCreateStringWithNumber(kCFAllocatorDefault, zeroFormatter, (CFNumberRef)@0) autorelease];
+            CFRelease(zeroFormatter);
+        }
+        CFNumberFormatterSetProperty(_formatter, kCFNumberFormatterZeroSymbol, (CFStringRef)symbol);
     }
     if (_attributes[(id)kCFNumberFormatterCurrencyCode])
     {
