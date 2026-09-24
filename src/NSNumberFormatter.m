@@ -70,6 +70,9 @@ static NSString *literalPattern(NSString *pattern)
 
 @implementation NSNumberFormatter
 
+// Declared by the header but not implemented yet; @dynamic keeps Clang from synthesizing inert storage.
+@dynamic minimum, maximum, partialStringValidationEnabled;
+
 + (NSString *)localizedStringFromNumber:(NSNumber *)num numberStyle:(NSNumberFormatterStyle)nstyle
 {
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
