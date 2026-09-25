@@ -34,6 +34,8 @@ typedef struct NSIndexSetCache NSIndexSetCache;
 - (instancetype)initWithIndexSet:(NSIndexSet *)indexSet;
 - (BOOL)isEqualToIndexSet:(NSIndexSet *)indexSet;
 - (NSUInteger)count;
+- (NSUInteger)rangeCount;
+- (NSRange)rangeAtIndex:(NSUInteger)index;
 - (NSUInteger)firstIndex;
 - (NSUInteger)lastIndex;
 - (NSUInteger)indexGreaterThanIndex:(NSUInteger)value;

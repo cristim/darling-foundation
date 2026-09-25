@@ -232,7 +232,8 @@ static inline void addIndexesInRange(NSIndexSet *self, NSRange range)
         }
         else
         {
-            DL_INSERT(MULTIPLE_RANGE_DATA(self), ptr, newRange);
+            RangeList *following = ptr->next;
+            DL_INSERT(MULTIPLE_RANGE_DATA(self), following, newRange);
         }
         
         [self _mergeOverlappingRangesStartingAtIndex:(ptr ?: MULTIPLE_RANGE_DATA(self))];
@@ -527,6 +528,34 @@ static inline CFComparisonResult NSIndexSetCompareEntry(RangeList *r1, RangeList
     {
         return CACHE(self)->rangeCount;
     }
+}
+
+- (NSRange)rangeAtIndex:(NSUInteger)index
+{
+    if (!IS_EMPTY(self))
+    {
+        if (HAS_SINGLE_RANGE(self))
+        {
+            if (index == 0)
+            {
+                return SINGLE_RANGE(self);
+            }
+        }
+        else
+        {
+            RangeList *entry = NULL;
+            DL_FOREACH(MULTIPLE_RANGE_DATA(self), entry)
+            {
+                if (index-- == 0)
+                {
+                    return entry->range;
+                }
+            }
+        }
+    }
+
+    [NSException raise:NSRangeException format:@"range index out of bounds"];
+    return NSMakeRange(NSNotFound, 0);
 }
 
 - (NSUInteger)firstIndex
