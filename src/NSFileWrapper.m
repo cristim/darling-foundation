@@ -235,6 +235,30 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	return NO;
 }
 
+- (BOOL)writeToURL:(NSURL *)url
+           options:(NSFileWrapperWritingOptions)options
+originalContentsURL:(NSURL *)originalContentsURL
+             error:(NSError **)outError
+{
+	if (![url isFileURL]) {
+		if (outError != NULL)
+			*outError = [NSError errorWithDomain:NSCocoaErrorDomain
+				code:NSFileWriteUnsupportedSchemeError
+				userInfo:url != nil ? @{ NSURLErrorKey: url } : nil];
+		return NO;
+	}
+
+	BOOL written = [self writeToFile:[url path]
+		atomically:(options & NSFileWrapperWritingAtomic) != 0
+		updateFilenames:(options & NSFileWrapperWritingWithNameUpdating) != 0];
+	if (!written && outError != NULL)
+		*outError = [NSError errorWithDomain:NSCocoaErrorDomain
+			code:NSFileWriteUnknownError userInfo:@{ NSURLErrorKey: url }];
+	else if (written && outError != NULL)
+		*outError = nil;
+	return written;
+}
+
 
 - (BOOL) needsToBeUpdatedFromPath: (NSString*) path
 {
