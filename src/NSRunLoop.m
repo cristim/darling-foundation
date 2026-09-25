@@ -75,6 +75,18 @@ static CFStringRef NSDelayedPerformerCopyDescription(const void *info)
 
 @implementation NSRunLoop (NSRunLoop)
 
+- (void) performInModes: (NSArray *) modes
+                  block: (void (^)(void)) block
+{
+    if (block == nil)
+        return;
+
+    CFTypeRef cfModes = [modes count] > 0
+        ? (CFTypeRef)modes : (CFTypeRef)kCFRunLoopDefaultMode;
+    CFRunLoopPerformBlock(_rl, cfModes, block);
+    CFRunLoopWakeUp(_rl);
+}
+
 static CFTypeRef NSRunLoopProvider(CFRunLoopRef rl)
 {
     return [NSRunLoop _new:rl];

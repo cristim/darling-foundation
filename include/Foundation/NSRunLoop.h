@@ -37,6 +37,9 @@ FOUNDATION_EXPORT const NSRunLoopMode NSRunLoopCommonModes;
 - (void) addPort: (NSPort *) aPort forMode: (NSRunLoopMode) mode;
 - (void) removePort: (NSPort *) aPort forMode: (NSRunLoopMode) mode;
 
+- (void) performInModes: (NSArray *) modes
+                  block: (void (^)(void)) block;
+
 - (NSDate *) limitDateForMode: (NSRunLoopMode) mode;
 - (void) acceptInputForMode: (NSRunLoopMode) mode beforeDate: (NSDate *) limitDate;
 
