@@ -18,7 +18,29 @@
 */
 
 #import <Foundation/NSFormatter.h>
+#import <CoreFoundation/CFDateFormatter.h>
+
+@class NSDate, NSTimeZone;
+
+typedef NS_OPTIONS(NSUInteger, NSISO8601DateFormatOptions) {
+    NSISO8601DateFormatWithYear = kCFISO8601DateFormatWithYear,
+    NSISO8601DateFormatWithMonth = kCFISO8601DateFormatWithMonth,
+    NSISO8601DateFormatWithWeekOfYear = kCFISO8601DateFormatWithWeekOfYear,
+    NSISO8601DateFormatWithDay = kCFISO8601DateFormatWithDay,
+    NSISO8601DateFormatWithTime = kCFISO8601DateFormatWithTime,
+    NSISO8601DateFormatWithTimeZone = kCFISO8601DateFormatWithTimeZone,
+    NSISO8601DateFormatWithSpaceBetweenDateAndTime = kCFISO8601DateFormatWithSpaceBetweenDateAndTime,
+    NSISO8601DateFormatWithDashSeparatorInDate = kCFISO8601DateFormatWithDashSeparatorInDate,
+    NSISO8601DateFormatWithColonSeparatorInTime = kCFISO8601DateFormatWithColonSeparatorInTime,
+    NSISO8601DateFormatWithColonSeparatorInTimeZone = kCFISO8601DateFormatWithColonSeparatorInTimeZone,
+    NSISO8601DateFormatWithFractionalSeconds = (1UL << 11),
+    NSISO8601DateFormatWithFullDate = kCFISO8601DateFormatWithFullDate,
+    NSISO8601DateFormatWithFullTime = kCFISO8601DateFormatWithFullTime,
+    NSISO8601DateFormatWithInternetDateTime = kCFISO8601DateFormatWithInternetDateTime,
+};
 
 @interface NSISO8601DateFormatter : NSFormatter <NSSecureCoding>
+
++ (NSString *)stringFromDate:(NSDate *)date timeZone:(NSTimeZone *)timeZone formatOptions:(NSISO8601DateFormatOptions)formatOptions;
 
 @end
