@@ -8,6 +8,7 @@
 #import <dispatch/dispatch.h>
 #import <CoreFoundation/CFBundle.h>
 #import <CoreFoundation/CFBundlePriv.h>
+#import <CoreFoundation/CFPropertyList.h>
 #import <objc/runtime.h>
 #import <Foundation/NSArray.h>
 #import <Foundation/NSString.h>
@@ -16,6 +17,7 @@
 #import <Foundation/NSURL.h>
 #import <Foundation/NSDictionary.h>
 #import <Foundation/NSFileManager.h>
+#import <Foundation/NSData.h>
 
 NSString *const NSBundleDidLoadNotification = @"NSBundleDidLoadNotification";
 NSString *const NSLoadedClasses = @"NSLoadedClasses";
@@ -662,6 +664,52 @@ static void __NSBundleMainBundleDealloc()
 - (NSString *)localizedStringForKey:(NSString *)key value:(NSString *)value table:(NSString *)tableName
 {
     return [(NSString *)CFBundleCopyLocalizedString(_cfBundle, (CFStringRef)key, (CFStringRef)value, (CFStringRef)tableName) autorelease];
+}
+
+static NSDictionary *localizedTableAtPath(NSString *path)
+{
+    NSData *data = path ? [NSData dataWithContentsOfFile:path] : nil;
+    if (!data) return nil;
+    CFPropertyListRef plist = CFPropertyListCreateWithData(kCFAllocatorDefault,
+            (CFDataRef)data, kCFPropertyListImmutable, NULL, NULL);
+    if (!plist) return nil;
+    if (CFGetTypeID(plist) != CFDictionaryGetTypeID()) {
+        CFRelease(plist);
+        return nil;
+    }
+    return [(NSDictionary *)plist autorelease];
+}
+
+- (NSDictionary *)localizedStringsForTable:(NSString *)tableName
+                              localization:(NSString *)localizationName
+{
+    if (![tableName length]) tableName = @"Localizable";
+
+    if ([localizationName length]) {
+        NSDictionary *strings = localizedTableAtPath([self pathForResource:tableName
+                                                                    ofType:@"strings"
+                                                               inDirectory:nil
+                                                           forLocalization:localizationName]);
+        if (strings) return strings;
+    } else {
+        NSDictionary *strings = localizedTableAtPath([self pathForResource:tableName ofType:@"strings"]);
+        if (strings) return strings;
+    }
+
+    NSDictionary *all = localizedTableAtPath([self pathForResource:tableName ofType:@"loctable"]);
+    if (!all) return [NSDictionary dictionary];
+
+    if ([localizationName length]) {
+        NSDictionary *strings = [all objectForKey:localizationName];
+        return [strings isKindOfClass:[NSDictionary class]] ? strings : [NSDictionary dictionary];
+    }
+
+    for (NSString *language in [self preferredLocalizations]) {
+        NSDictionary *strings = [all objectForKey:language];
+        if ([strings isKindOfClass:[NSDictionary class]]) return strings;
+    }
+    NSDictionary *english = [all objectForKey:@"en"];
+    return [english isKindOfClass:[NSDictionary class]] ? english : [NSDictionary dictionary];
 }
 
 - (id)objectForInfoDictionaryKey:(NSString *)key
