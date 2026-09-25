@@ -352,6 +352,37 @@ SINGLETON_RR()
 	}
 }
 
+- (BOOL)automaticTerminationSupportEnabled
+{
+    @synchronized (self) {
+        return automaticTerminationSupportEnabled;
+    }
+}
+
+- (void)setAutomaticTerminationSupportEnabled:(BOOL)enabled
+{
+    @synchronized (self) {
+        automaticTerminationSupportEnabled = enabled;
+    }
+}
+
+- (void)disableAutomaticTermination:(NSString *)reason
+{
+    (void)reason;
+    @synchronized (self) {
+        automaticTerminationOptOutCounter++;
+    }
+}
+
+- (void)enableAutomaticTermination:(NSString *)reason
+{
+    (void)reason;
+    @synchronized (self) {
+        if (automaticTerminationOptOutCounter > 0)
+            automaticTerminationOptOutCounter--;
+    }
+}
+
 @end
 
 // Darling has no sudden-termination mechanism, so there is no state to track.

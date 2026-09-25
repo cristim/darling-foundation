@@ -29,6 +29,7 @@ NSOperatingSystemVersion;
     NSString *hostName; // singly created
     NSString *name; // singly created, but replaceable
     NSInteger automaticTerminationOptOutCounter;
+    BOOL automaticTerminationSupportEnabled;
 }
 
 @property (class, readonly, retain) NSProcessInfo *processInfo;
@@ -48,6 +49,9 @@ NSOperatingSystemVersion;
 - (NSTimeInterval)systemUptime;
 - (NSOperatingSystemVersion)operatingSystemVersion;
 - (BOOL)isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion)version;
+@property BOOL automaticTerminationSupportEnabled;
+- (void)disableAutomaticTermination:(NSString *)reason;
+- (void)enableAutomaticTermination:(NSString *)reason;
 
 @end
 
