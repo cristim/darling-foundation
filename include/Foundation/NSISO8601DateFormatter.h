@@ -20,7 +20,7 @@
 #import <Foundation/NSFormatter.h>
 #import <CoreFoundation/CFDateFormatter.h>
 
-@class NSDate, NSTimeZone;
+@class NSDate, NSTimeZone, NSDateFormatter;
 
 typedef NS_OPTIONS(NSUInteger, NSISO8601DateFormatOptions) {
     NSISO8601DateFormatWithYear = kCFISO8601DateFormatWithYear,
@@ -39,7 +39,18 @@ typedef NS_OPTIONS(NSUInteger, NSISO8601DateFormatOptions) {
     NSISO8601DateFormatWithInternetDateTime = kCFISO8601DateFormatWithInternetDateTime,
 };
 
-@interface NSISO8601DateFormatter : NSFormatter <NSSecureCoding>
+@interface NSISO8601DateFormatter : NSFormatter <NSSecureCoding> {
+@private
+    NSDateFormatter *_formatter;
+    NSTimeZone *_timeZone;
+    NSISO8601DateFormatOptions _formatOptions;
+}
+
+@property (retain) NSTimeZone *timeZone;
+@property NSISO8601DateFormatOptions formatOptions;
+
+- (NSString *)stringFromDate:(NSDate *)date;
+- (NSDate *)dateFromString:(NSString *)string;
 
 + (NSString *)stringFromDate:(NSDate *)date timeZone:(NSTimeZone *)timeZone formatOptions:(NSISO8601DateFormatOptions)formatOptions;
 

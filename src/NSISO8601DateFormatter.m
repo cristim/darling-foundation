@@ -59,15 +59,81 @@ static NSString *ISO8601Pattern(NSISO8601DateFormatOptions options) {
 @implementation NSISO8601DateFormatter
 
 + (NSString *)stringFromDate:(NSDate *)date timeZone:(NSTimeZone *)timeZone formatOptions:(NSISO8601DateFormatOptions)options {
-    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    NSLocale *locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
-    [formatter setLocale:locale];
-    [locale release];
-    [formatter setTimeZone:timeZone ?: [NSTimeZone timeZoneForSecondsFromGMT:0]];
-    [formatter setDateFormat:ISO8601Pattern(options)];
+    NSISO8601DateFormatter *formatter = [[self alloc] init];
+    [formatter setTimeZone:timeZone];
+    [formatter setFormatOptions:options];
     NSString *result = [[formatter stringFromDate:date] retain];
     [formatter release];
     return [result autorelease];
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _timeZone = [[NSTimeZone timeZoneForSecondsFromGMT:0] retain];
+        _formatOptions = NSISO8601DateFormatWithInternetDateTime;
+    }
+    return self;
+}
+
+- (void)dealloc {
+    [_formatter release];
+    [_timeZone release];
+    [super dealloc];
+}
+
+- (NSTimeZone *)timeZone {
+    @synchronized(self) {
+        return [[_timeZone retain] autorelease];
+    }
+}
+
+- (void)setTimeZone:(NSTimeZone *)timeZone {
+    NSTimeZone *value = [(timeZone ?: [NSTimeZone timeZoneForSecondsFromGMT:0]) retain];
+    @synchronized(self) {
+        [_timeZone release];
+        _timeZone = value;
+        [_formatter release];
+        _formatter = nil;
+    }
+}
+
+- (NSISO8601DateFormatOptions)formatOptions {
+    @synchronized(self) {
+        return _formatOptions;
+    }
+}
+
+- (void)setFormatOptions:(NSISO8601DateFormatOptions)options {
+    @synchronized(self) {
+        _formatOptions = options;
+        [_formatter release];
+        _formatter = nil;
+    }
+}
+
+- (NSDateFormatter *)currentFormatter {
+    if (_formatter == nil) {
+        _formatter = [[NSDateFormatter alloc] init];
+        NSLocale *locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+        [_formatter setLocale:locale];
+        [locale release];
+        [_formatter setTimeZone:_timeZone];
+        [_formatter setDateFormat:ISO8601Pattern(_formatOptions)];
+    }
+    return _formatter;
+}
+
+- (NSString *)stringFromDate:(NSDate *)date {
+    @synchronized(self) {
+        return [[[[self currentFormatter] stringFromDate:date] retain] autorelease];
+    }
+}
+
+- (NSDate *)dateFromString:(NSString *)string {
+    @synchronized(self) {
+        return [[[[self currentFormatter] dateFromString:string] retain] autorelease];
+    }
 }
 
 - (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector {
@@ -89,7 +155,7 @@ static NSString *ISO8601Pattern(NSISO8601DateFormatOptions options) {
 	NSLog(@"[NSISO8601DateFormatter encodeWithCoder:");
 }
 
-- (BOOL)supportsSecureCoding
++ (BOOL)supportsSecureCoding
 {
 	return YES;
 }
