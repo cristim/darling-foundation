@@ -87,7 +87,13 @@
         additionInfoPtr->originalObservable = object;
         additionInfoPtr->observance = observance;
         NSObject *firstLevel = [object valueForKey:self.relationshipKey];
-        [firstLevel addObserver:observance forKeyPath:self.keyPathFromRelatedObject options:newOptions context:newContext]; //this is the scariest line of code I think I've written yet
+        // A nil relationship yields NSNull, and NSNull is not observable, so sending it addObserver:
+        // raises. The removal path a few lines above guards for exactly this reason; this path did
+        // not, so observing a key whose value is NSNull aborted the guest app.
+        if ([firstLevel isKindOfClass: [NSObject class]])
+        {
+            [firstLevel addObserver:observance forKeyPath:self.keyPathFromRelatedObject options:newOptions context:newContext]; //this is the scariest line of code I think I've written yet
+        }
         *additionInfoPtr = savedAddtionInfo;
     }
     if (forwardingValues.recursedMutableDictionary != nil)
@@ -107,7 +113,14 @@
     forwardingValues->recursedMutableDictionary = nil;
     if (self.isAllowedToResultInForwarding)
     {
-        forwardingValues->_field1 = [object valueForKey:self.relationshipKey] ?: [NSNull null];
+        id relatedObject = [object valueForKey:self.relationshipKey];
+        // Forward only a real observable. The previous code substituted NSNull for a nil
+        // relationship, and that placeholder was then treated as an observable further down the
+        // chain: -[NSNull object:withObservance:didChangeValueForKeyOrKeys:...] does not exist, so
+        // observing a key whose relationship is nil aborted the guest app. Leaving _field1 nil
+        // matches how the removal path and the caller's `if (_field1 != nil)` test already expect
+        // "nothing to forward".
+        forwardingValues->_field1 = [relatedObject isKindOfClass: [NSObject class]] ? relatedObject : nil;
     }
     NSKeyValueForwardingValues tempValues = {0};
     if ([self.relationshipProperty object:object withObservance:observance willChangeValueForKeyOrKeys:keyOrKeys recurse:shouldRecurse forwardingValues:&tempValues])
