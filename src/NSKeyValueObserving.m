@@ -641,6 +641,10 @@ static void NSKeyValueRaiseUnregistered(NSObject *receiver, NSObject *observer, 
 
 - (void)removeObserver:(NSObject *)observer forKeyPath:(NSString *)keyPath context:(void *)context
 {
+    dispatch_once(&__NSKeyValueObserverRegistrationLockCreationToken,
+    ^{
+        __NSKeyValueObserverRegisterationLock = [[NSRecursiveLock alloc] init];
+    });
     [__NSKeyValueObserverRegisterationLock lock];
     NSKeyValueProperty *property = _NSKeyValuePropertyForIsaAndKeyPath(object_getClass(self), keyPath);
     NSKeyValueObservationInfo *observationInfo = [self observationInfo];
@@ -664,6 +668,10 @@ static void NSKeyValueRaiseUnregistered(NSObject *receiver, NSObject *observer, 
 
 - (void)removeObserver:(NSObject *)observer forKeyPath:(NSString *)keyPath
 {
+    dispatch_once(&__NSKeyValueObserverRegistrationLockCreationToken,
+    ^{
+        __NSKeyValueObserverRegisterationLock = [[NSRecursiveLock alloc] init];
+    });
     [__NSKeyValueObserverRegisterationLock lock];
     NSKeyValueProperty *property = _NSKeyValuePropertyForIsaAndKeyPath(object_getClass(self), keyPath);
     [self _removeObserver:observer forProperty:property optionalObservance:nil];
@@ -789,6 +797,10 @@ static void NSKVODeallocate(id self, SEL _cmd)
     {
         return;
     }
+    dispatch_once(&__NSKeyValueObserverRegistrationLockCreationToken,
+    ^{
+        __NSKeyValueObserverRegisterationLock = [[NSRecursiveLock alloc] init];
+    });
     [__NSKeyValueObserverRegisterationLock lock];
     while (index != NSNotFound)
     {
