@@ -1578,6 +1578,8 @@ static CFDictionaryValueCallBacks sNSCFDictionaryValueCallBacks = {
     }
     BOOL error = NO;
     int errorIndex = 0;
+    uint64_t failingUID = 0;
+    const char *failingReason = NULL;
     const int elementCount = len;   // len is truncated to the failing index below
 
     for (int i = 0; i < len; i++)
@@ -1586,11 +1588,13 @@ static CFDictionaryValueCallBacks sNSCFDictionaryValueCallBacks = {
         if (!__CFBinaryPlistGetOffsetForValueFromArray2(_bytes, _len, voffset, &_offsetData->trailer, i, &offset2, _reservedDictionary))
         {
             error = YES;
+            failingReason = "no plist offset for element";
         }
         NSUInteger uid1 = 0;
         if (!error && !_getUIDFromData((uint8_t *)(_bytes + offset2), &uid1))
         {
             error = YES;
+            failingReason = "element data is not a UID reference";
         }
         if (!error)
         {
@@ -1598,6 +1602,8 @@ static CFDictionaryValueCallBacks sNSCFDictionaryValueCallBacks = {
             if (elements[i] == nil)
             {
                 error = YES;
+                failingUID = uid1;
+                failingReason = "referenced object could not be decoded";
             }
         }
         if (error)
@@ -1623,8 +1629,9 @@ static CFDictionaryValueCallBacks sNSCFDictionaryValueCallBacks = {
         // Callers pair this array with another decoded array by index, so returning a short
         // one lets a decode failure read as data and surface much later as a range exception.
         [NSException raise:NSInvalidUnarchiveOperationException
-                    format:@"Failed to decode element %d of %d in array for key %@",
-                           errorIndex, elementCount, key];
+                    format:@"Failed to decode element %d of %d in array for key %@ (%s, uid %llu)",
+                           errorIndex, elementCount, key, failingReason ? failingReason : "unknown",
+                           (unsigned long long) failingUID];
     }
     return [array autorelease];
 }
