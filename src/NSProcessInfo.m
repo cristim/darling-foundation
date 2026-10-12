@@ -305,6 +305,13 @@ SINGLETON_RR()
     return t.tv_sec + t.tv_usec / (NSTimeInterval)USEC_PER_SEC;
 }
 
+- (NSProcessInfoThermalState)thermalState
+{
+    /* No thermal-pressure source on Linux; report Nominal so clients
+     * (e.g. Chromium's ThermalStateObserverMac) proceed normally. */
+    return NSProcessInfoThermalStateNominal;
+}
+
 - (NSOperatingSystemVersion)operatingSystemVersion
 {
 	NSOperatingSystemVersion version = { 0, 0, 0 };
@@ -396,3 +403,5 @@ void __NSInitializeProcess(int argc,const char *argv[]) {
     }
 }
 #endif
+
+NSString *const NSProcessInfoThermalStateDidChangeNotification = @"NSProcessInfoThermalStateDidChangeNotification";

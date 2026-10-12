@@ -34,3 +34,5 @@
 }
 
 @end
+
+NSString *const NSUserActivityTypeBrowsingWeb = @"com.apple.coreservices.useractivity.browser";

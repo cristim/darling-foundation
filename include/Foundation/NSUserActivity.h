@@ -21,3 +21,5 @@
 
 @interface NSUserActivity : NSObject
 @end
+
+FOUNDATION_EXPORT NSString *const NSUserActivityTypeBrowsingWeb;
