@@ -167,19 +167,19 @@ static int64_t _getInt(uint8_t **ptrptr)
     if (encodeKey == (kCFBinaryPlistMarkerInt | 2))
     {
         *ptrptr += 5;
-        return ((*ptr << 24) + (*(ptr + 1) << 16) + (*(ptr + 2) << 8) + *(ptr + 3));
+        return ((uint32_t)ptr[0] << 24) | ((uint32_t)ptr[1] << 16) | ((uint32_t)ptr[2] << 8) | ptr[3];
     }
     if  (encodeKey == (kCFBinaryPlistMarkerInt | 3)) {  // long long encoding, including all negative values
         *ptrptr += 9;
-        int64_t acc = 0;
+        uint64_t acc = 0;
         for (int i = 0; i < 8; i++)
         {
             acc <<= 8;
             acc += ptr[i];
         }
-        return acc;
+        return (int64_t)acc;
     }
-    DEBUG_BREAK();  // unrecognized key
+    [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find integer, marker 0x%02x", encodeKey];
     return 0;
 }
 
@@ -255,6 +255,12 @@ static BOOL _decodeBool(NSKeyedUnarchiver *unarchiver, NSString *key)
         {
             return NO;
         }
+        if (CFGetTypeID(val) == CFNumberGetTypeID() && !CFNumberIsFloatType((CFNumberRef)val))
+        {
+            int64_t intVal = 0;
+            CFNumberGetValue((CFNumberRef)val, kCFNumberSInt64Type, &intVal);
+            return intVal != 0;
+        }
         if (CFGetTypeID(val) != CFBooleanGetTypeID())
         {
             [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find bool value for key %@", key];
@@ -277,7 +283,12 @@ static BOOL _decodeBool(NSKeyedUnarchiver *unarchiver, NSString *key)
     {
         return NO;
     }
-    DEBUG_BREAK();  // Should never get here
+    if (encodedVal >= kCFBinaryPlistMarkerInt && encodedVal <= (kCFBinaryPlistMarkerInt | 3))
+    {
+        uint8_t *ptr = (uint8_t *)(unarchiver->_bytes + voffset);
+        return _getInt(&ptr) != 0;
+    }
+    [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find bool value for key %@", key];
     return NO;
 }
 
@@ -294,11 +305,6 @@ static double _decodeDouble(NSKeyedUnarchiver *unarchiver, NSString *key)
         if (CFGetTypeID(val) != CFNumberGetTypeID())
         {
             [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find number for key %@", key];
-            return 0;
-        }
-        if (!CFNumberIsFloatType((CFNumberRef)val))
-        {
-            [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find floating point typed number for key %@", key];
             return 0;
         }
         double doubleVal = -1.0;
@@ -326,7 +332,12 @@ static double _decodeDouble(NSKeyedUnarchiver *unarchiver, NSString *key)
         memmove(&swapped32, ptr + 1, 4);
         return (double)CFConvertFloat32SwappedToHost(swapped32);
     }
-    DEBUG_BREAK(); // Should never get here
+    // Archives from other encoders (e.g. nibs) store integral values such as NSPriority as integers.
+    if (*ptr >= kCFBinaryPlistMarkerInt && *ptr <= (kCFBinaryPlistMarkerInt | 3))
+    {
+        return (double)_getInt(&ptr);
+    }
+    [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find number for key %@", key];
     return 0.0;
 }
 
@@ -369,11 +380,12 @@ static const uint8_t *_decodeBytes(NSKeyedUnarchiver *unarchiver, NSString * key
         {
             return nil; // bad encoding
         }
-        if (CFEqual(@"$null", string))
+        BOOL isNull = CFEqual(@"$null", string);
+        CFRelease(string);
+        if (isNull)
         {
             return nil;
         }
-        DEBUG_BREAK(); // $null should be the only string (kCFBinaryPlistMarkerASCIIString) possible here
     }
     else if ((encodeKey & 0xf0) == kCFBinaryPlistMarkerData)
     {
@@ -388,7 +400,7 @@ static const uint8_t *_decodeBytes(NSKeyedUnarchiver *unarchiver, NSString * key
             return ptr;
         }
     }
-    DEBUG_BREAK(); // Should never get here
+    [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find byte array for key %@", key];
     return NULL;
 }
 
@@ -431,6 +443,19 @@ static BOOL _getUIDFromData(uint8_t *ptr, NSUInteger *returnVal)
     }
     *returnVal = (NSUInteger)bigint;
     return YES;
+}
+
+// A class is allowed if it is one of the allowed classes or a subclass of one.
+static BOOL _classIsAllowed(Class class, NSSet *allowedClasses)
+{
+    for (Class allowedClass in allowedClasses)
+    {
+        if ([class isSubclassOfClass:allowedClass])
+        {
+            return YES;
+        }
+    }
+    return NO;
 }
 
 static id _decodeObjectBinary(NSKeyedUnarchiver *unarchiver, NSUInteger uid1) NS_RETURNS_RETAINED
@@ -559,7 +584,7 @@ static id _decodeObjectBinary(NSKeyedUnarchiver *unarchiver, NSUInteger uid1) NS
         if ([unarchiver requiresSecureCoding])
         {
             NSSet *allowedClassSet = [unarchiver allowedClasses];
-            if (![allowedClassSet containsObject:class]) {
+            if (!_classIsAllowed(class, allowedClassSet)) {
                 exception = [NSException exceptionWithName:NSInvalidUnarchiveOperationException
                                         reason:[NSString stringWithFormat:@"%@ was unexpected. The expected classes are %@", className, allowedClassSet]
                                       userInfo: @{@"__NSCoderInternalErrorCode" : @4864}];
@@ -713,7 +738,7 @@ static id _decodeObjectXML(NSKeyedUnarchiver *unarchiver, NSString *key)
     if ([unarchiver requiresSecureCoding])
     {
         NSSet *allowedClassSet = [unarchiver allowedClasses];
-        if (![allowedClassSet containsObject:class]) {
+        if (!_classIsAllowed(class, allowedClassSet)) {
             [[NSException exceptionWithName:NSInvalidUnarchiveOperationException
                                     reason:[NSString stringWithFormat:@"%@ was unexpected. The expected classes are %@", className, allowedClassSet]
                                     userInfo: @{@"__NSCoderInternalErrorCode" : @4864} ] raise];
@@ -1527,9 +1552,8 @@ static CFDictionaryValueCallBacks sNSCFDictionaryValueCallBacks = {
 
     if ((encodeKey & 0xf0) != kCFBinaryPlistMarkerArray)
     {
-        DEBUG_BREAK();
+        [NSException raise:NSInvalidUnarchiveOperationException format:@"Did not find array for key %@", key];
         return nil;
-        // TODO
     }
     int len = encodeKey & 0xf;
     if (len == 0xf)
@@ -1785,6 +1809,78 @@ static CFDictionaryValueCallBacks sNSCFDictionaryValueCallBacks = {
 #warning TODO
     DEBUG_BREAK();
     return nil;
+}
+
+@end
+
+// Decodes the root object with secure coding, as on macOS: every decoded object must be of
+// one of the given classes or a property list class, and the root must be an instance of one
+// of the given classes.
+@implementation NSKeyedUnarchiver (NSUnarchivingOfClasses)
+
+static NSError *unarchivingError(NSInteger code, NSString *description)
+{
+    return [NSError errorWithDomain: NSCocoaErrorDomain
+                               code: code
+                           userInfo: @{ NSLocalizedDescriptionKey : description }];
+}
+
++ (id)unarchivedObjectOfClasses:(NSSet *)classes fromData:(NSData *)data error:(NSError **)error
+{
+    if (error)
+        *error = nil;
+    if (data == nil || [classes count] == 0) {
+        if (error)
+            *error = unarchivingError(4864 /* NSCoderReadCorruptError */, @"The data isn't in the correct format.");
+        return nil;
+    }
+
+    NSMutableSet *decodableClasses = [NSMutableSet setWithSet: classes];
+    [decodableClasses addObjectsFromArray: @[ [NSArray class], [NSDictionary class], [NSString class],
+                                              [NSNumber class], [NSData class], [NSDate class] ]];
+
+    id object = nil;
+    NSKeyedUnarchiver *unarchiver = nil;
+    @try {
+        unarchiver = [[NSKeyedUnarchiver alloc] initForReadingWithData: data];
+        [unarchiver setRequiresSecureCoding: YES];
+        object = [[unarchiver decodeObjectOfClasses: decodableClasses forKey: NSKeyedArchiveRootObjectKey] retain];
+        [unarchiver finishDecoding];
+    } @catch (NSException *exception) {
+        [object release];
+        object = nil;
+        if (error)
+            *error = unarchivingError(4864 /* NSCoderReadCorruptError */, [exception reason] ?: @"The data couldn't be read because it isn't in the correct format.");
+    }
+    [unarchiver release];
+
+    if (object == nil) {
+        if (error && *error == nil)
+            *error = unarchivingError(4865 /* NSCoderValueNotFoundError */, @"The data doesn't contain a root object.");
+        return nil;
+    }
+
+    BOOL allowed = NO;
+    for (Class cls in classes) {
+        if ([object isKindOfClass: cls]) {
+            allowed = YES;
+            break;
+        }
+    }
+    if (!allowed) {
+        if (error)
+            *error = unarchivingError(4864 /* NSCoderReadCorruptError */, [NSString stringWithFormat: @"The root object's class %@ isn't one of the allowed classes.", [object class]]);
+        [object release];
+        return nil;
+    }
+    return [object autorelease];
+}
+
++ (id)unarchivedObjectOfClass:(Class)cls fromData:(NSData *)data error:(NSError **)error
+{
+    return [self unarchivedObjectOfClasses: cls ? [NSSet setWithObject: cls] : nil
+                                  fromData: data
+                                     error: error];
 }
 
 @end
