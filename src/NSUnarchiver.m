@@ -688,7 +688,24 @@ static unsigned int roundUp(unsigned int size, unsigned int align);
             *((int*)data) = value;
             break;
         }
-            
+
+        // long long values use the same integer encoding as int.
+        case 'q':
+        case 'Q':
+        {
+            int value;
+            if(![self decodeInt:&value])
+            {
+                rv = NO;
+                break;
+            }
+            if(ch == 'q')
+                *((long long*)data) = value;
+            else
+                *((unsigned long long*)data) = (unsigned int)value;
+            break;
+        }
+
         case 'f':
         {
             float value;
@@ -727,6 +744,17 @@ static unsigned int roundUp(unsigned int size, unsigned int align);
         }
             
         case '*':
+        {
+            // A C string is a shared object (a label, then a shared string), not a bare shared string.
+            NSString* string;
+            if(![self decodeString:&string])
+            {
+                rv = NO;
+                break;
+            }
+            *((char**)data) = string ? strdup(string.UTF8String) : NULL;
+            break;
+        }
         case '%':
         case ':':
         case '#':
@@ -750,11 +778,7 @@ static unsigned int roundUp(unsigned int size, unsigned int align);
               remainingRange:NULL];
             cString[string.length] = '\0';
 
-            if (ch == '*')
-            {
-               *((const char**)data) = cString;
-            }
-            else if (ch == '%')
+            if (ch == '%')
             {
                *((const char**)data) = uniqueString(cString);
                free(cString);
@@ -922,6 +946,51 @@ static unsigned int roundUp(unsigned int size, unsigned int align);
     va_end (argList);
 }
 
+// Archives written by 32-bit code store points and sizes as "ff" and rects as "ffff".
+- (void)_decodeGeometry:(CGFloat*)values count:(unsigned)count type:(const char*)type legacyType:(const char*)legacyType
+{
+    NSString* string;
+    const char* str = [self decodeSharedString:&string] ? [string cStringUsingEncoding:NSASCIIStringEncoding] : NULL;
+    BOOL legacy = str && strcmp(str, legacyType) == 0;
+    BOOL ok = legacy || (str && strcmp(str, type) == 0);
+
+    for(unsigned i = 0; i < count && ok; i++)
+    {
+        if(legacy)
+        {
+            float value;
+            if((ok = [self decodeFloat:&value]))
+                values[i] = value;
+        }
+        else
+            ok = [self readType:@encode(CGFloat) data:&values[i]];
+    }
+
+    if(!ok)
+        [NSException raise:NSInvalidArgumentException format:@"NSUnarchiver: cannot decode geometry of type '%s', expected '%s' or '%s'", str ? str : "", type, legacyType];
+}
+
+- (CGPoint)decodePoint
+{
+    CGFloat v[2];
+    [self _decodeGeometry:v count:2 type:@encode(CGPoint) legacyType:"ff"];
+    return CGPointMake(v[0], v[1]);
+}
+
+- (CGSize)decodeSize
+{
+    CGFloat v[2];
+    [self _decodeGeometry:v count:2 type:@encode(CGSize) legacyType:"ff"];
+    return CGSizeMake(v[0], v[1]);
+}
+
+- (CGRect)decodeRect
+{
+    CGFloat v[4];
+    [self _decodeGeometry:v count:4 type:@encode(CGRect) legacyType:"ffff"];
+    return CGRectMake(v[0], v[1], v[2], v[3]);
+}
+
 - (void*)decodeBytesWithReturnedLength:(NSUInteger*)outLength
 {
     NSParameterAssert(outLength);
@@ -986,6 +1055,11 @@ static unsigned int roundUp(unsigned int size, unsigned int align);
 	if (mapped != nil)
 		return mapped;
 	return className;
+}
+
+// Private API apps send before decoding. NSUnarchiver doesn't restrict the classes it decodes, so the
+// set is accepted and ignored.
+-(void)_setAllowedClasses:(NSSet *)classes {
 }
 
 -(void)replaceObject:original withObject:replacement {
@@ -1081,6 +1155,8 @@ const char* sizeofType(const char* type, unsigned int* size, unsigned int* align
       simpleCase('!', int);
       simpleCase('l', int);
       simpleCase('L', int);
+      simpleCase('q', long long);
+      simpleCase('Q', long long);
       simpleCase('f', float);
       simpleCase('d', double);
       simpleCase('@', id);
